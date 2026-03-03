@@ -1,3 +1,11 @@
+const express = require("express");
+const dotenv = require("dotenv");
+const cors = require("cors");
+const mongoose = require("mongoose");
+const bodyParser = require("body-parser");
+const http = require("http");
+const { Server } = require("socket.io");
+
 const yargs = require("yargs");
 const { hideBin } = require("yargs/helpers");
 
@@ -8,7 +16,10 @@ const { pushRepo } = require("./controllers/push");
 const { pullRepo } = require("./controllers/pull");
 const { revertRepo } = require("./controllers/revert");
 
+dotenv.config();
+
 yargs(hideBin(process.argv))
+    .command("start", "Start a new server", {}, startServer)
     .command("init", "Initialise a new repository", {}, initRepo)
     .command(
         "add <file>",
@@ -55,3 +66,50 @@ yargs(hideBin(process.argv))
     .help()
     .argv;
 
+function startServer() {
+    const app = express();
+    const port = process.env.PORT || 3000;
+
+    app.use(bodyParser.json());
+    app.use(express.json());
+    const mongoURI = process.env.MONGODB_URI;
+
+    mongoose
+        .connect(mongoURI)
+        .then(() => console.log("Connected to MongoDB"))
+        .catch((err) => console.error("Error connecting to MongoDB: ", err));    
+
+    app.use(cors({ origin: "*" }));
+    app.get("/", (req, res) => {
+        res.send("Welcome to the Version Control System!");
+    });
+
+    let user = "test";
+    const httpServer = http.createServer(app);
+    const io = new Server(httpServer, {
+        cors: {
+            origin: "*",
+            methods: ["GET", "POST"],
+        },
+    });
+
+    io.on("connection", (socket) => {
+        socket.on("JoinRoom", (userID) => {
+            user = userID;
+            console.log("====");
+            console.log(user);
+            console.log("====");
+            socket.join(user);
+        });
+    });
+
+    const db = mongoose.connection;
+    db.once("open", async () => {
+        console.log("CRUD Operations called!");
+        //CRUD Operations
+    });
+
+    httpServer.listen(port, () => {
+        console.log(`Server is running on port ${port}`);
+    });
+}
