@@ -17,7 +17,7 @@ async function connectClient() {
         });
         await client.connect();
     }
-}
+};
 
 async function signup(req, res) {
     const { username, email, password } = req.body;
@@ -114,7 +114,7 @@ async function getUserProfile(req, res) {
         console.error("Error fetching user profile:", error);
         res.status(500).json({ message: "Internal server error" });
     }
-}
+};
 
 async function updateUserProfile(req, res) {
     const currentID = req.params.id;
@@ -145,7 +145,7 @@ async function updateUserProfile(req, res) {
         console.error("Error updating user profile:", error);
         res.status(500).json({ message: "Internal server error" });
     }
-}
+};
 
 async function deleteUserProfile(req, res) {
     const currentID = req.params.id;
@@ -162,7 +162,7 @@ async function deleteUserProfile(req, res) {
         console.error("Error deleting user profile:", error);
         res.status(500).json({ message: "Internal server error" });
     }
-}
+};
 
 module.exports = {
     getAllUsers,

@@ -21,7 +21,7 @@ async function createIssue(req, res) {
     console.error("Error during issue creation : ", err.message);
     res.status(500).send("Server error");
   }
-}
+};
 
 async function updateIssueById(req, res) {
   const { id } = req.params;
@@ -44,7 +44,7 @@ async function updateIssueById(req, res) {
     console.error("Error during issue updation : ", err.message);
     res.status(500).send("Server error");
   }
-}
+};
 
 async function deleteIssueById(req, res) {
   const { id } = req.params;
@@ -60,7 +60,7 @@ async function deleteIssueById(req, res) {
     console.error("Error during issue deletion : ", err.message);
     res.status(500).send("Server error");
   }
-}
+};
 
 async function getAllIssues(req, res) {
   const { id } = req.params;
@@ -76,7 +76,7 @@ async function getAllIssues(req, res) {
     console.error("Error during issue fetching : ", err.message);
     res.status(500).send("Server error");
   }
-}
+};
 
 async function getIssueById(req, res) {
   const { id } = req.params;
@@ -92,7 +92,7 @@ async function getIssueById(req, res) {
     console.error("Error during issue updation : ", err.message);
     res.status(500).send("Server error");
   }
-}
+};
 
 module.exports = {
   createIssue,
