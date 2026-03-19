@@ -55,7 +55,7 @@ export default function LoginPage() {
           <h1 style={{ fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: 4 }}>
             Welcome back
           </h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Sign in to your MyVCS account</p>
+          <p style={{ color: 'var(--text-secondary)' }}>Sign in to your VersaCore account</p>
         </div>
 
         <div style={{

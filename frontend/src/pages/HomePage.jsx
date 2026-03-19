@@ -34,7 +34,7 @@ export default function HomePage() {
         </h1>
 
         <p style={{ fontSize: '1.125rem', color: 'var(--text-secondary)', maxWidth: 520, margin: '0 auto 36px', lineHeight: 1.7 }}>
-          MyVCS is a lightweight version control platform. Initialize repos, stage files, commit changes, and manage issues — all in one place.
+          VersaCore is a lightweight version control platform. Initialize repos, stage files, commit changes, and manage issues — all in one place.
         </p>
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>

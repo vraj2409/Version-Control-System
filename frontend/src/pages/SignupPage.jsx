@@ -46,7 +46,7 @@ export default function SignupPage() {
             <GitBranch size={24} color="white" />
           </div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: 4 }}>Create account</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Start tracking your code with MyVCS</p>
+          <p style={{ color: 'var(--text-secondary)' }}>Start tracking your code with VersaCore</p>
         </div>
         <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 28 }}>
           {apiError && <div style={{ marginBottom: 20 }}><Alert type="error">{apiError}</Alert></div>}

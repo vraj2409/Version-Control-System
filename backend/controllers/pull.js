@@ -1,5 +1,5 @@
-require('dotenv').config({ 
-  path: require('path').resolve(__dirname, '../.env') 
+require('dotenv').config({
+  path: require('path').resolve(__dirname, '../.env')
 });
 const fs = require('fs').promises;
 const path = require('path');
@@ -21,24 +21,30 @@ async function pullRepo() {
   const commitsPath = path.join(repoPath, 'commits');
 
   try {
-    // ── Read repoId from config ──────────────────────────────
-    let repoId = "default";
+    // ── Read userId + repoId from config ──────────────────────
+    let repoId = 'default';
+    let userId = 'default';
     try {
       const config = JSON.parse(
         await fs.readFile(path.join(repoPath, 'config.json'), 'utf-8')
       );
-      repoId = config.repoId || "default";
+      repoId = config.repoId || 'default';
+      userId = config.userId || 'default';
     } catch {
-      console.log("No config found, using default folder.");
+      console.log('No config found, using default folder.');
     }
 
-    console.log(`Pulling from bucket: ${S3_BUCKET}`);
-    console.log(`Repository: ${repoId}`);
+    // ── Prefix: userId/repoId/commits/ ────────────────────────
+    const prefix = `${userId}/${repoId}/commits/`;
 
-    // FIX — only list objects for THIS repo
+    console.log(`Pulling from : ${S3_BUCKET}`);
+    console.log(`User         : ${userId}`);
+    console.log(`Repository   : ${repoId}`);
+    console.log(`S3 prefix    : ${prefix}\n`);
+
     const listCommand = new ListObjectsV2Command({
       Bucket: S3_BUCKET,
-      Prefix: `repos/${repoId}/commits/`,
+      Prefix: prefix,
     });
 
     const data = await s3.send(listCommand);
@@ -49,15 +55,22 @@ async function pullRepo() {
       return;
     }
 
-    console.log(`Found ${objects.length} files in S3...`);
+    console.log(`Found ${objects.length} files in S3...\n`);
 
     for (const object of objects) {
       const key = object.Key;
 
-      // Extract: repos/{repoId}/commits/{commitId}/{file}
+      // key format: userId/repoId/commits/commitId/filename
+      // parts[0] = userId
+      // parts[1] = repoId
+      // parts[2] = "commits"
+      // parts[3] = commitId
+      // parts[4] = filename
       const parts = key.split('/');
       const commitId = parts[3];
       const fileName = parts[4];
+
+      if (!commitId || !fileName) continue;
 
       const commitDir = path.join(commitsPath, commitId);
       await fs.mkdir(commitDir, { recursive: true });
@@ -80,7 +93,7 @@ async function pullRepo() {
       console.log(`Downloaded: ${commitId}/${fileName}`);
     }
 
-    console.log('✓ All commits pulled from S3 successfully!');
+    console.log('\n✓ All commits pulled from S3 successfully!');
   } catch (err) {
     console.error('Error pulling from S3:', err.message);
   }

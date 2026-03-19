@@ -52,4 +52,11 @@ export const issueAPI = {
   delete: (id) => api.delete(`/issue/delete/${id}`),
 };
 
+export const commitAPI = {
+  getAll: (repoId) => api.get(`/commits/${repoId}`),
+  upload: (formData) => api.post('/commits/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+};
+
 export default api;

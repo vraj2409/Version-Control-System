@@ -1,26 +1,25 @@
-const moongose = require("mongoose");
+const mongoose = require("mongoose");
 const Repository = require("../models/repoModel");
 const User = require("../models/userModel");
 const Issue = require("../models/issueModel");
 
 async function createRepository(req, res) {
   const { owner, name, issues, content, description, visibility } = req.body;
-  try{
-    if(!name){
+  try {
+    if (!name) {
       return res.status(400).send("Repository name is required");
     }
-
-    if(!moongose.Types.ObjectId.isValid(owner)){
+    if (!mongoose.Types.ObjectId.isValid(owner)) {
       return res.status(400).send("Invalid owner ID");
     }
 
+    // ── Only allow creating repo for yourself ──────────────────
+    if (req.user.id.toString() !== owner.toString()) {
+      return res.status(403).json({ error: "You can only create repositories for your own account." });
+    }
+
     const newRepository = new Repository({
-      owner,
-      name,
-      issues,
-      content,
-      description,
-      visibility
+      owner, name, issues, content, description, visibility
     });
 
     const result = await newRepository.save();
@@ -28,71 +27,119 @@ async function createRepository(req, res) {
       module: "Repository Created!!",
       repositoryID: result._id,
     });
-
-  }catch(error){
+  } catch (error) {
     console.error("Error creating repository:", error);
     res.status(500).send("Internal server error");
   }
-};
+}
 
 async function getAllRepositories(req, res) {
   try {
-    const repositories = await Repository.find({})
+    // ── Return public repos OR repos owned by current user ─────
+    const repositories = await Repository.find({
+      $or: [
+        { visibility: true },
+        { owner: req.user.id }
+      ]
+    })
       .populate("owner")
       .populate("issues");
-      
+
     res.json(repositories);
   } catch (err) {
-    console.error("Error during fetching repositories : ", err.message);
+    console.error("Error during fetching repositories:", err.message);
     res.status(500).send("Server error");
   }
-};
+}
 
 async function fetchRepositoryById(req, res) {
   const { id } = req.params;
   try {
-    const repository = await Repository.find({ _id: id })
+    const repository = await Repository.findById(id)
       .populate("owner")
       .populate("issues");
 
+    if (!repository) {
+      return res.status(404).json({ error: "Repository not found!" });
+    }
+
+    // ── Get owner ID as string (handles populated + unpopulated)
+    const ownerId = repository.owner?._id
+      ? repository.owner._id.toString()
+      : repository.owner?.toString();
+
+    const currentUserId = req.user.id?.toString();
+
+    // ── Private repo: only owner can access ────────────────────
+    if (!repository.visibility && ownerId !== currentUserId) {
+      return res.status(403).json({ error: "This repository is private." });
+    }
+
     res.json(repository);
   } catch (err) {
-    console.error("Error during fetching repository : ", err.message);
+    console.error("Error during fetching repository:", err.message);
     res.status(500).send("Server error");
   }
-};
+}
 
 async function fetchRepositoryByName(req, res) {
   const { name } = req.params;
   try {
-    const repository = await Repository.find({ name })
+    const repository = await Repository.findOne({ name })
       .populate("owner")
       .populate("issues");
 
+    if (!repository) {
+      return res.status(404).json({ error: "Repository not found!" });
+    }
+
+    const ownerId = repository.owner?._id
+      ? repository.owner._id.toString()
+      : repository.owner?.toString();
+
+    const currentUserId = req.user.id?.toString();
+
+    // ── Private repo: only owner can access ────────────────────
+    if (!repository.visibility && ownerId !== currentUserId) {
+      return res.status(403).json({ error: "This repository is private." });
+    }
+
     res.json(repository);
   } catch (err) {
-    console.error("Error during fetching repository : ", err.message);
+    console.error("Error during fetching repository:", err.message);
     res.status(500).send("Server error");
   }
-};
+}
 
 async function fetchRepositoriesForCurrentUser(req, res) {
-  console.log(req.params);
   const { userID } = req.params;
 
   try {
-    const repositories = await Repository.find({ owner: userID });
+    const currentUserId = req.user.id?.toString();
+    const requestedUserId = userID?.toString();
 
-    if (!repositories || repositories.length == 0) {
+    let query;
+
+    if (requestedUserId === currentUserId) {
+      // ── Own profile: return ALL repos (public + private) ─────
+      query = { owner: userID };
+    } else {
+      // ── Other user's profile: only public repos ──────────────
+      query = { owner: userID, visibility: true };
+    }
+
+    const repositories = await Repository.find(query);
+
+    if (!repositories || repositories.length === 0) {
       return res.status(404).json({ error: "User Repositories not found!" });
     }
-    console.log(repositories);
+
     res.json({ message: "Repositories found!", repositories });
   } catch (err) {
-    console.error("Error during fetching user repositories : ", err.message);
+    console.error("Error during fetching user repositories:", err.message);
     res.status(500).send("Server error");
   }
-};
+}
 
 async function updateRepositoryById(req, res) {
   const { id } = req.params;
@@ -104,32 +151,39 @@ async function updateRepositoryById(req, res) {
       return res.status(404).json({ error: "Repository not found!" });
     }
 
-    repository.content.push(content);
-    repository.description = description;
+    // ── Only owner can update ──────────────────────────────────
+    if (repository.owner.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ error: "Only the repository owner can update it." });
+    }
+
+    if (content) repository.content.push(content);
+    if (description !== undefined) repository.description = description;
 
     const updatedRepository = await repository.save();
-
     res.json({
       message: "Repository updated successfully!",
       repository: updatedRepository,
     });
   } catch (err) {
-    console.error("Error during updating repository : ", err.message);
+    console.error("Error during updating repository:", err.message);
     res.status(500).send("Server error");
   }
-};
+}
 
 async function toggleVisibilityById(req, res) {
   const { id } = req.params;
-
   try {
     const repository = await Repository.findById(id);
     if (!repository) {
       return res.status(404).json({ error: "Repository not found!" });
     }
 
-    repository.visibility = !repository.visibility;
+    // ── Only owner can toggle visibility ───────────────────────
+    if (repository.owner.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ error: "Only the repository owner can change visibility." });
+    }
 
+    repository.visibility = !repository.visibility;
     const updatedRepository = await repository.save();
 
     res.json({
@@ -137,68 +191,29 @@ async function toggleVisibilityById(req, res) {
       repository: updatedRepository,
     });
   } catch (err) {
-    console.error("Error during toggling visibility : ", err.message);
+    console.error("Error during toggling visibility:", err.message);
     res.status(500).send("Server error");
   }
-};
+}
 
 async function deleteRepositoryById(req, res) {
   const { id } = req.params;
   try {
-    const repository = await Repository.findByIdAndDelete(id);
+    const repository = await Repository.findById(id);
     if (!repository) {
       return res.status(404).json({ error: "Repository not found!" });
     }
 
-    res.json({ message: "Repository deleted successfully!" });
-  } catch (err) {
-    console.error("Error during deleting repository : ", err.message);
-    res.status(500).send("Server error");
-  }
-};  
-
-async function toggleStarRepository(req, res) {
-  const { id } = req.params;
-  
-  console.log('Body received:', req.body);
-  console.log('Repo ID:', id);
-
-  const userID = req.body?.userID || req.body?.userId;
-
-  if (!userID) {
-    return res.status(400).json({ error: 'userID is required in request body' });
-  }
-
-  try {
-    const User = require('../models/userModel');
-
-    const user = await User.findById(userID);
-    if (!user) return res.status(404).json({ error: 'User not found!' });
-
-    const isStarred = user.starRepos.some(
-      repoId => repoId.toString() === id.toString()
-    );
-
-    if (isStarred) {
-      user.starRepos = user.starRepos.filter(
-        repoId => repoId.toString() !== id.toString()
-      );
-    } else {
-      user.starRepos.push(id);
+    // ── Only owner can delete ──────────────────────────────────
+    if (repository.owner.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ error: "Only the repository owner can delete it." });
     }
 
-    await user.save();
-
-    console.log('Star toggled. isStarred was:', isStarred, '→ now:', !isStarred);
-
-    res.json({
-      message: isStarred ? 'Repository unstarred' : 'Repository starred',
-      starred: !isStarred,
-      starRepos: user.starRepos,
-    });
+    await Repository.findByIdAndDelete(id);
+    res.json({ message: "Repository deleted successfully!" });
   } catch (err) {
-    console.error('Error toggling star:', err);
-    res.status(500).json({ error: err.message });
+    console.error("Error during deleting repository:", err.message);
+    res.status(500).send("Server error");
   }
 }
 
@@ -211,5 +226,4 @@ module.exports = {
   updateRepositoryById,
   toggleVisibilityById,
   deleteRepositoryById,
-  toggleStarRepository
 };

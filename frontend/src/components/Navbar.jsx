@@ -42,7 +42,7 @@ export default function Navbar() {
             fontWeight: 700, fontSize: '1.1rem',
             color: 'var(--text-primary)', letterSpacing: '-0.02em',
           }}>
-            MyVCS
+            VersaCore
           </span>
         </Link>
 
