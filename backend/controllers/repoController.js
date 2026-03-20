@@ -3,23 +3,30 @@ const Repository = require("../models/repoModel");
 const User = require("../models/userModel");
 const Issue = require("../models/issueModel");
 
+// ── Helper: normalize any owner/user ID to plain string ───────
+function toStr(id) {
+  if (!id) return '';
+  if (typeof id === 'object' && id._id) return id._id.toString();
+  return id.toString();
+}
+
 async function createRepository(req, res) {
-  const { owner, name, issues, content, description, visibility } = req.body;
+  const { name, issues, content, description, visibility } = req.body;
   try {
     if (!name) {
       return res.status(400).send("Repository name is required");
     }
-    if (!mongoose.Types.ObjectId.isValid(owner)) {
-      return res.status(400).send("Invalid owner ID");
-    }
 
-    // ── Only allow creating repo for yourself ──────────────────
-    if (req.user.id.toString() !== owner.toString()) {
-      return res.status(403).json({ error: "You can only create repositories for your own account." });
-    }
+    // ── Always use the authenticated user as owner ─────────────
+    const ownerId = req.user.id || req.user._id;
 
     const newRepository = new Repository({
-      owner, name, issues, content, description, visibility
+      owner: ownerId,
+      name,
+      issues,
+      content,
+      description,
+      visibility
     });
 
     const result = await newRepository.save();
@@ -35,11 +42,13 @@ async function createRepository(req, res) {
 
 async function getAllRepositories(req, res) {
   try {
+    const currentUserId = req.user.id || req.user._id;
+
     // ── Return public repos OR repos owned by current user ─────
     const repositories = await Repository.find({
       $or: [
         { visibility: true },
-        { owner: req.user.id }
+        { owner: currentUserId }
       ]
     })
       .populate("owner")
@@ -55,25 +64,28 @@ async function getAllRepositories(req, res) {
 async function fetchRepositoryById(req, res) {
   const { id } = req.params;
   try {
-    const repository = await Repository.findById(id)
-      .populate("owner")
-      .populate("issues");
+    // ── First fetch WITHOUT populate to get raw owner ObjectId ─
+    const repositoryRaw = await Repository.findById(id);
 
-    if (!repository) {
+    if (!repositoryRaw) {
       return res.status(404).json({ error: "Repository not found!" });
     }
 
-    // ── Get owner ID as string (handles populated + unpopulated)
-    const ownerId = repository.owner?._id
-      ? repository.owner._id.toString()
-      : repository.owner?.toString();
+    // ── Compare raw owner ID (never null even if user not found)
+    const ownerId = repositoryRaw.owner?.toString() || '';
+    const currentUserId = toStr(req.user.id || req.user._id);
 
-    const currentUserId = req.user.id?.toString();
+    const isPublic = repositoryRaw.visibility === true;
+    const isOwner = ownerId === currentUserId;
 
-    // ── Private repo: only owner can access ────────────────────
-    if (!repository.visibility && ownerId !== currentUserId) {
+    if (!isPublic && !isOwner) {
       return res.status(403).json({ error: "This repository is private." });
     }
+
+    // ── Now fetch WITH populate only for the response ──────────
+    const repository = await Repository.findById(id)
+      .populate("owner")
+      .populate("issues");
 
     res.json(repository);
   } catch (err) {
@@ -93,14 +105,15 @@ async function fetchRepositoryByName(req, res) {
       return res.status(404).json({ error: "Repository not found!" });
     }
 
-    const ownerId = repository.owner?._id
-      ? repository.owner._id.toString()
-      : repository.owner?.toString();
+    // ── Normalize both IDs to plain strings ────────────────────
+    const ownerId = toStr(repository.owner);
+    const currentUserId = toStr(req.user.id || req.user._id);
 
-    const currentUserId = req.user.id?.toString();
+    const isPublic = repository.visibility === true;
+    const isOwner = ownerId === currentUserId;
 
-    // ── Private repo: only owner can access ────────────────────
-    if (!repository.visibility && ownerId !== currentUserId) {
+    // ── Private repo: block non-owners ────────────────────────
+    if (!isPublic && !isOwner) {
       return res.status(403).json({ error: "This repository is private." });
     }
 
@@ -113,10 +126,9 @@ async function fetchRepositoryByName(req, res) {
 
 async function fetchRepositoriesForCurrentUser(req, res) {
   const { userID } = req.params;
-
   try {
-    const currentUserId = req.user.id?.toString();
-    const requestedUserId = userID?.toString();
+    const currentUserId = toStr(req.user.id || req.user._id);
+    const requestedUserId = toStr(userID);
 
     let query;
 
@@ -144,7 +156,6 @@ async function fetchRepositoriesForCurrentUser(req, res) {
 async function updateRepositoryById(req, res) {
   const { id } = req.params;
   const { content, description } = req.body;
-
   try {
     const repository = await Repository.findById(id);
     if (!repository) {
@@ -152,7 +163,10 @@ async function updateRepositoryById(req, res) {
     }
 
     // ── Only owner can update ──────────────────────────────────
-    if (repository.owner.toString() !== req.user.id.toString()) {
+    const ownerId = toStr(repository.owner);
+    const currentUserId = toStr(req.user.id || req.user._id);
+
+    if (ownerId !== currentUserId) {
       return res.status(403).json({ error: "Only the repository owner can update it." });
     }
 
@@ -179,7 +193,10 @@ async function toggleVisibilityById(req, res) {
     }
 
     // ── Only owner can toggle visibility ───────────────────────
-    if (repository.owner.toString() !== req.user.id.toString()) {
+    const ownerId = toStr(repository.owner);
+    const currentUserId = toStr(req.user.id || req.user._id);
+
+    if (ownerId !== currentUserId) {
       return res.status(403).json({ error: "Only the repository owner can change visibility." });
     }
 
@@ -205,7 +222,10 @@ async function deleteRepositoryById(req, res) {
     }
 
     // ── Only owner can delete ──────────────────────────────────
-    if (repository.owner.toString() !== req.user.id.toString()) {
+    const ownerId = toStr(repository.owner);
+    const currentUserId = toStr(req.user.id || req.user._id);
+
+    if (ownerId !== currentUserId) {
       return res.status(403).json({ error: "Only the repository owner can delete it." });
     }
 
