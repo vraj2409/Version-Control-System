@@ -97,6 +97,13 @@ async function commitRepo(message) {
       }
     }
 
+    // ── Clear staging folder after commit ────────────────────
+    const stagedFiles = await fs.readdir(stagedPath);
+    for (const file of stagedFiles) {
+      await fs.unlink(path.join(stagedPath, file));
+    }
+    console.log("Staging folder cleared after commit");
+
   } catch (err) {
     console.error("Error committing files:", err);
   }
